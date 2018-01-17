@@ -1,0 +1,273 @@
+unit dmMainU;
+
+interface
+
+uses
+  SysUtils, Classes, GeneralTypesU, UtilsU, ImgList, Controls,
+  RevisionCheckerU, Dialogs, JvComponentBase, Graphics, Types, JvPicClip,
+  JvBaseDlg, JvSelectDirectory, XPMan, RepositoryFunctionsU,
+  JvRichEditToHtml;
+
+type
+  EIconList=(ilChecked, ilObject, ilTerrain, ilMOB, ilTerrainFlag, ilGeneral);
+
+  TdmMain = class(TDataModule)
+    ilMain: TImageList;
+    rcMain: TRevisionChecker;
+    clMain: TComplexLogger;
+    odMain: TOpenDialog;
+    sdMain: TSaveDialog;
+    JvPCItemTypes: TJvPicClip;
+    JvPCRoomSectors: TJvPicClip;
+    JvPCMOBTypes: TJvPicClip;
+    JvSDMain: TJvSelectDirectory;
+    XPm: TXPManifest;
+    Repository: TRepository;
+    JvRichEditToHtml1: TJvRichEditToHtml;
+    procedure DataModuleCreate(Sender: TObject);
+    procedure DataModuleDestroy(Sender: TObject);
+  private
+    FMUDInfoFolder: String;
+    FAdvanced: Boolean;
+    FSpecialAccess: Boolean;
+    FMobileGoldAdjust: Single;
+    FMobileAdjust: Single;
+    FMobileMaxLevelAdjust: Single;
+    FObjMinLevel: Integer;
+    FObjLevelAdj: Single;
+    FAutoSetRareValue: Boolean;
+    FDescColumns: Integer;
+    procedure SetMUDInfoFolder(const Value: String);
+    { Private declarations }
+  public
+    { Public declarations }
+    Procedure DrawIcon(IconType:EIconList;Canvas:TCanvas;Rect:TRect;Index:Integer);
+    Property DescColumns:Integer read FDescColumns;
+    Property MUDInfoFolder:String read FMUDInfoFolder write SetMUDInfoFolder;
+    Property Advanced:Boolean read FAdvanced;
+    Property SpecialAccess:Boolean read FSpecialAccess;
+    property MobileAdjust:Single read FMobileAdjust;
+    property MobileMaxLevelAdjust:Single read FMobileMaxLevelAdjust;
+    property MobileGoldAdjust:Single read FMobileGoldAdjust;
+    property ObjLevelAdj:Single read FObjLevelAdj; 
+    property ObjMinLevel:Integer read FObjMinLevel;
+    property AutoSetRareValue:Boolean read FAutoSetRareValue;
+  end;
+
+var
+  dmMain: TdmMain;
+
+implementation
+
+{$R *.dfm}
+
+Uses IniFiles;
+
+procedure TdmMain.DataModuleCreate(Sender: TObject);
+begin
+  MUDInfoFolder:='.\Nebbie';
+end;
+
+procedure TdmMain.DrawIcon(IconType: EIconList; Canvas: TCanvas;
+  Rect: TRect; Index:Integer);
+begin
+  Case IconType Of
+  ilGeneral:
+    If (Index>=0) And (Index<ilMain.Count) Then
+      ilMain.Draw(Canvas,Rect.Left,Rect.Top,Index);
+  ilChecked:
+    Case Index Of
+    0: ilMain.Draw(Canvas,Rect.Left,Rect.Top,3);
+    1: ilMain.Draw(Canvas,Rect.Left,Rect.Top,4);
+    Else
+      ilMain.Draw(Canvas,Rect.Left,Rect.Top,13);
+    End;
+  ilMOB:
+    If (Index>=0) And (Index<JvPCMOBTypes.Cols) Then
+      JvPCMOBTypes.DrawCenter(Canvas,Rect,Index)
+    Else
+      Canvas.FillRect(Rect);
+  ilObject:
+    If (Index>=0) And (Index<JvPCItemTypes.Cols) Then
+      JvPCItemTypes.DrawCenter(Canvas,Rect,Index)
+    Else
+      Canvas.FillRect(Rect);
+  ilTerrain:
+    If (Index>=0) And (Index<JvPCRoomSectors.Cols) Then
+      JvPCRoomSectors.DrawCenter(Canvas,Rect,Index)
+    Else
+      Canvas.FillRect(Rect);
+  ilTerrainFlag:
+    If (Index>=0) And (Index<JvPCRoomSectors.Cols) Then
+      JvPCRoomSectors.DrawCenter(Canvas,Rect,Index+JvPCRoomSectors.Cols)
+    Else
+      Canvas.FillRect(Rect);
+  End;
+end;
+
+procedure TdmMain.SetMUDInfoFolder(const Value: String);
+var
+  LI:Integer;
+  LG:EWearGroup;
+  LIniFile:TIniFile;
+begin
+  FMUDInfoFolder := Value;
+
+  LIniFile:=TIniFile.Create(FMUDInfoFolder+PathDelim+'MUD.ini');
+  Try
+    FSpecialAccess:=LIniFile.ReadBool('Administrative','Special',False);
+    FAdvanced:=LIniFile.ReadBool('Administrative','Advanced',False);
+    FMobileAdjust:=LIniFile.ReadFloat('Mobiles','Adjust',150.0);
+    FMobileGoldAdjust:=LIniFile.ReadFloat('Mobiles','GoldAdjust',0.5);
+    FMobileMaxLevelAdjust:=LIniFile.ReadFloat('Mobiles','MaxLevAdjust',1.0);
+    FObjMinLevel:=LIniFile.ReadInteger('Objects','MinLevel',-10);
+    FObjLevelAdj:=LIniFile.ReadFloat('Objects','LevelAdjust',1.0);
+    FAutoSetRareValue:=LIniFile.ReadBool('Objects','AutoSetRareValue',False);
+    FDescColumns:=LIniFile.ReadInteger('Text','Columns',60);
+  Finally
+    LIniFile.Free;
+  End;
+
+  // Zones
+  LoadDataFile(FMUDInfoFolder+PathDelim+'ResetModes.INI',ClearResetModeList,ExtractResetModeString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'IniCommands.INI',ClearIniCommandList,ExtractIniCommandFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'SProcs.ini',ClearSpecialProcList,ExtractSpecialProcFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'MobBretheType.ini',ClearBretheTypeList,ExtractBretheTypeFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'ClassCombinations.ini',ClearClassCombinationList,ExtractClassCombinationFromString);
+
+  // Rooms
+  LoadDataFile(FMUDInfoFolder+PathDelim+'RTYPES.INI',ClearRoomTypeList,ExtractRoomTypesString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'RoomFlags.INI',ClearRoomFlagList,ExtractRoomFlagsString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'OpenCommands.INI',ClearOpenCommandList,ExtractOpenCommandString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'TeleportFlags.INI',ClearTeleportFlagList,ExtractTeleportFlagsString);
+  TFM_Count:=0;
+  For LI:=0 to High(CRoomFlags) Do
+    Begin
+      If CTEleportFlags[LI].Group=1 Then
+        TFM_Count:=TFM_Count+(1 shl CTEleportFlags[LI].ID);
+    End;
+
+  LoadDataFile(FMUDInfoFolder+PathDelim+'ExitFlags.INI',ClearExitFlagList,ExtractExitFlagFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'DoorState.INI',ClearDoorStateList,ExtractDoorStateFromString);
+
+
+  RFM_Tunnel:=0;
+  RFM_Death:=0;
+  For LI:=0 to High(CRoomFlags) Do
+    Begin
+      If CRoomFlags[LI].Group=1 Then
+        RFM_Tunnel:=RFM_Tunnel+(1 shl CRoomFlags[LI].ID);
+      If CRoomFlags[LI].Group=2 Then
+        RFM_Death:=RFM_Death+(1 shl CRoomFlags[LI].ID);
+    End;
+  // Items
+  LoadDataFile(FMUDInfoFolder+PathDelim+'ITYPES.INI',ClearItemTypeList,ExtractItemTypeFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'ObjFlags.INI',ClearObjFlagList,ExtractObjFlagString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'ObjWear.INI',ClearWearFlagList,ExtractWearFlagString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'Applies.INI',ClearApplyList,ExtractApplyString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'Limit.INI',ClearLimitList,ExtractLimitString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'ALLSPELLS.INI',ClearSpellList,ExtractSpellFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'WGrid.INI',ClearWPDamageList,ExtractWPDamageFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'MissileTypes.ini',ClearMissileTypeList,ExtractMissileTypeFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'ATypes.ini',ClearArmorTypeList,ExtractArmorTypeFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'TrapDamageTypes.ini',ClearTrapDMGList,ExtractTrapDMGFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'TrapFlags.ini',ClearTrapFlagList,ExtractTrapFlagFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'ContainerFlags.ini',ClearContainerFlagList,ExtractContainerFlagFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'Languages.ini',ClearLanguageList,ExtractLanguageFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'LGrid.ini',ClearLiquidList,ExtractLiquidFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'DrinkContainerFlags.ini',ClearLiquidContainerFlagList,ExtractLiquidContainerFlagFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'KeyFlags.ini',ClearKeyFlagList,ExtractKeyFlagFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'FoodFlags.ini',ClearFoodFlagList,ExtractFoodFlagFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'Affections.ini',ClearSpellAffectList,ExtractSpellAffectFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'DamageFlags.ini',ClearDamageFlagList,ExtractDamageFlagFromString);
+  // Setting special item variables
+  OFM_AntiFlags:=0;
+  OFM_BlockSkillFlag:=0;
+  OFM_FixedMagicFlags:=0;
+  OFM_OpenAidFlags:=0;
+  OFM_OnlyClass:=0;
+
+  For LI:=1 to High(CObjFlags) Do
+    Begin
+      If (CObjFlags[LI].Flags AND MIFF_MAGIC)>0 Then
+        OFM_FixedMagicFlags:=OFM_FixedMagicFlags + (1 shl CObjFlags[LI].ID);
+      If (CObjFlags[LI].Flags AND MIFF_OPEN_AID)>0 Then
+        OFM_OpenAidFlags:=OFM_OpenAidFlags + (1 shl CObjFlags[LI].ID);
+      If (CObjFlags[LI].Flags AND MIFF_BLOCK_SKILLS)>0 Then
+        OFM_BlockSkillFlag:=OFM_BlockSkillFlag + (1 shl CObjFlags[LI].ID);
+      If (CObjFlags[LI].Flags AND MIFF_ANTI_CLASS)>0 Then
+        OFM_AntiFlags:=OFM_AntiFlags + (1 shl CObjFlags[LI].ID);
+      If CObjFlags[LI].Group=IFG_ONLY_CLASS Then
+        Begin
+          OFM_OnlyClass:=OFM_OnlyClass + (1 shl CObjFlags[LI].ID);
+          OFP_OnlyClass:=LI;
+        End
+    End;
+
+  // Mobiles
+  LoadDataFile(FMUDInfoFolder+PathDelim+'MTYPES.INI',ClearMobileTypeList,ExtractMobileTypeFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'MGENDERS.INI',ClearGenderList,ExtractGenderFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'MobLocations.INI',ClearMobLocationList,ExtractMobLocationFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'XPBonusLvl.INI',ClearXPPerLevelList,ExtractXPPerLevelFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'MPOS.INI',ClearMobPosList,ExtractMobPosFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'mraces.ini',ClearRaceList,ExtractRaceFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'MobAffections.ini',ClearMobAffectList,ExtractMobAffectFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'MobActions.ini',ClearMobActionList,ExtractMobActionFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'Align.ini',ClearAlignList,ExtractAlignFromString);
+  LoadDataFile(FMUDInfoFolder+PathDelim+'MobReactions.ini',ClearReactionTargetList,ExtractReactionTargetFromString);
+
+  WFM_Generic:=0;
+  WFM_Armor:=0;
+  WFM_Wield:=0;
+  WFM_Shield:=0;
+  WFM_Jewels:=0;
+  WFM_Holdable:=0;
+  WFM_Backpack:=0;
+  WFM_Throwable:=0;
+  for LG:=Low(EWearGroup) to High(EWearGroup) Do
+    CWearGroupMasks[LG]:=0;
+  For LI:=0 to High(CWearFlags) Do
+    CWearGroupMasks[EWearGroup(CWearFlags[LI].Group)]:=CWearGroupMasks[EWearGroup(CWearFlags[LI].Group)]+(1 shl CWearFlags[LI].ID);
+
+  For LI:=0 to High(CWearFlags) Do
+    Case CWearFlags[LI].Group Of
+    WFG_Generic: WFM_Generic:=WFM_Generic + (1 shl CWearFlags[LI].ID);
+    WFG_Armor: WFM_Armor:=WFM_Armor + (1 shl CWearFlags[LI].ID);
+    WFG_Wield: WFM_Wield:=WFM_Wield + (1 shl CWearFlags[LI].ID);
+    WFG_Shield: WFM_Shield:=WFM_Shield + (1 shl CWearFlags[LI].ID);
+    WFG_Jewels: WFM_Jewels:=WFM_Jewels + (1 shl CWearFlags[LI].ID);
+    WFG_Hold: WFM_Holdable:=WFM_Holdable + (1 shl CWearFlags[LI].ID);
+    WFG_Backpack: WFM_Backpack:=WFM_Backpack + (1 shl CWearFlags[LI].ID);
+    WFG_Throw: WFM_Throwable:=WFM_Throwable + (1 shl CWearFlags[LI].ID);
+    End;
+
+  JvPCItemTypes.Picture.LoadFromFile(FMUDInfoFolder+PathDelim+'obj-icons.bmp');
+  JvPCItemTypes.Cols:=Length(CItemTypes);
+  JvPCRoomSectors.Picture.LoadFromFile(FMUDInfoFolder+PathDelim+'room-icons.bmp');
+  JvPCRoomSectors.Cols:=Length(CRoomTypes)-1;
+  JvPCRoomSectors.Rows:=2;
+  JvPCMOBTypes.Picture.LoadFromFile(FMUDInfoFolder+PathDelim+'mob-icons.bmp');
+  JvPCMOBTypes.Cols:=Length(CMobTypeList);
+end;
+
+procedure TdmMain.DataModuleDestroy(Sender: TObject);
+//var
+  //LIniFile:TIniFile;
+begin
+  {LIniFile:=TIniFile.Create(FMUDInfoFolder+PathDelim+'MUD.ini');
+  Try
+    LIniFile.WriteBool('Administrative','Special',FSpecialAccess);
+    LIniFile.WriteBool('Administrative','Advanced',FAdvanced);
+    LIniFile.WriteFloat('Mobiles','Adjust',FMobileAdjust);
+    LIniFile.WriteFloat('Mobiles','GoldAdjust',FMobileGoldAdjust);
+    LIniFile.WriteFloat('Mobiles','MaxLevAdjust',FMobileMaxLevelAdjust);
+    LIniFile.WriteInteger('Objects','MinLevel',FObjMinLevel);
+    LIniFile.WriteFloat('Objects','LevelAdjust',FObjLevelAdj);
+    LIniFile.UpdateFile;
+  Finally
+    LIniFile.Free;
+  End;}
+
+end;
+
+end.

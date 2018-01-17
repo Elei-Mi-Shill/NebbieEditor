@@ -1,0 +1,301 @@
+unit frmEditExitsU;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, StdCtrls, XPStyleActnCtrls, ActnList, ActnMan, ExtCtrls,
+  ComCtrls, AdvTxtEditorU, fraEditorBarU, Buttons, GeneralTypesU;
+
+type
+  TfrmEditExits = class(TForm)
+    Label1: TLabel;
+    edtKey: TEdit;
+    frmEditingToolsDesc: TfrmEditingTools;
+    Ruler1: TRuler;
+    reDesc: TRichEdit;
+    Label2: TLabel;
+    cbTargetRoom: TComboBox;
+    Label3: TLabel;
+    cbKeyItem: TComboBox;
+    gbFlags: TGroupBox;
+    rgCommands: TRadioGroup;
+    amEditExits: TActionManager;
+    rgStatus: TRadioGroup;
+    aApply: TAction;
+    aUndo: TAction;
+    SpeedButton1: TSpeedButton;
+    SpeedButton2: TSpeedButton;
+    aOpenOpposite: TAction;
+    SpeedButton3: TSpeedButton;
+    procedure edtKeyKeyPress(Sender: TObject; var Key: Char);
+    procedure FormCreate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
+    procedure aUndoExecute(Sender: TObject);
+    procedure aApplyExecute(Sender: TObject);
+    procedure aOpenOppositeExecute(Sender: TObject);
+    procedure ResetVNUM(Sender: TObject);
+  private
+    { Private declarations }
+    FExitFlags:Array of TCheckBox;
+    FZone: TZone;
+    FDirection:Integer;
+    FRoomVNUM: Integer;
+    procedure SetZone(const Value: TZone);
+    function GetExit: RExit;
+    procedure SetExit(const Value: RExit);
+    Procedure ChangeExitFlag(Sender:TObject);
+    procedure SetRoomVNUM(const Value: Integer);
+    procedure SetDirection(const Value: Integer);
+  public
+    { Public declarations }
+    Property Zone:TZone read FZone write SetZone;
+    Property Exit:RExit read GetExit write SetExit;
+    Property RoomVNUM:Integer read FRoomVNUM write SetRoomVNUM;
+    Property Direction:Integer read FDirection write SetDirection;
+  end;
+
+var
+  frmEditExits: TfrmEditExits;
+
+implementation
+
+uses dmMainU, UtilsU;
+
+{$R *.dfm}
+
+procedure TfrmEditExits.edtKeyKeyPress(Sender: TObject; var Key: Char);
+begin
+  if Not (Key in ['a'..'z','0'..'9',' ',#8]) Then
+    Begin
+      Key:=#0;
+      Beep;
+    End;
+end;
+
+procedure TfrmEditExits.FormCreate(Sender: TObject);
+var
+  LI:Integer;
+  LRect:TRect;
+  LMaxLines:Integer;
+begin
+  For LI:=0 to High(COpenCommands) Do
+    rgCommands.Items.Add(COpenCommands[LI].Name);
+  For LI:=0 to High(CDoorState) Do
+    rgStatus.Items.Add(CDoorState[LI].Name);
+  SetLength(FExitFlags,Length(CExitFlags));
+  LRect.Bottom:=16;
+  LRect.Right:=75;
+  LMaxLines:=(gbFlags.Height-15) Div LRect.Bottom;
+  For LI:=0 to High(CExitFlags) Do
+    Begin
+      LRect.Top:=15+((LI MOD LMaxLines)*LRect.Bottom);
+      LRect.Left:=5+((LI Div LMaxLines)*LRect.Right);
+      FExitFlags[LI]:=CreateCheckBox(gbFlags,CExitFlags[LI].ID,CExitFlags[LI].Name,CExitFlags[LI].Description,LRect,ChangeExitFlag);
+    End;
+end;
+
+procedure TfrmEditExits.FormDestroy(Sender: TObject);
+begin
+  SetLength(FExitFlags,0);
+end;
+
+procedure TfrmEditExits.SetZone(const Value: TZone);
+var
+  LI:Integer;
+begin
+  FZone := Value;
+  cbTargetRoom.Clear;
+  cbKeyItem.Clear;
+  If Assigned(FZone) Then
+    Begin
+      cbTargetRoom.AddItem(VNUMToStr(-1)+' [Uscita fittizia]',Nil);
+      For LI:=0 to Pred(FZone.Rooms.Count) Do
+        With (FZone.Rooms[LI] as TRoom) Do
+          cbTargetRoom.AddItem(FZone.Rooms[LI].ListName,FZone.Rooms[LI]);
+      cbKeyItem.AddItem(VNUMToStr(0)+' [Uscita diretta]',Nil);
+      For LI:=0 to Pred(FZone.Items.Count) Do
+        cbKeyItem.AddItem(FZone.Items[LI].ListName,FZone.Items[LI]);
+    End;
+end;
+
+procedure TfrmEditExits.aUndoExecute(Sender: TObject);
+begin
+  ModalResult:=mrAbort;
+end;
+
+procedure TfrmEditExits.aApplyExecute(Sender: TObject);
+begin
+  ModalResult:=mrOk;
+end;
+
+function TfrmEditExits.GetExit: RExit;
+begin
+  Result.Opened:=True;
+  Result.Keys:=edtKey.Text;
+  RTFToNebbie2(reDesc,Not reDesc.WantReturns,Result.Description);
+  Result.Flags:=DecodeFlags(FExitFlags);
+  Result.KeyVNUM:=SpecialStrToVNUM(cbKeyItem.Text);
+  Result.TargetRoom:=SpecialStrToVNUM(cbTargetRoom.Text);
+  If rgCommands.ItemIndex>=0 Then
+    Result.OpenCommand:=COpenCommands[rgCommands.ItemIndex].ID
+  Else
+    Result.OpenCommand:=0;
+  Result.DefaultState:=rgStatus.ItemIndex;
+end;
+
+procedure TfrmEditExits.SetExit(const Value: RExit);
+var
+  LI:Integer;
+begin
+  If Value.Opened Then
+    Begin
+      FDirection:=Value.Direction;
+      edtKey.Text:=Value.Keys;
+
+      NebbieToRTF(Value.Description,reDesc,frmEditingToolsDesc.ataAttributes);
+      
+      EncodeFlags(FExitFlags,Value.Flags);
+
+      cbKeyItem.ItemIndex:=-1;
+      For LI:=1 to Pred(FZone.Items.Count) Do
+        Begin
+          If Value.KeyVNUM=(cbKeyItem.Items.Objects[LI] as TItem).VNum Then
+            Begin
+              cbKeyItem.ItemIndex:=LI;
+              Break;
+            End;
+        End;
+      If cbKeyItem.ItemIndex=-1 Then
+        Begin
+          If Value.KeyVNUM=0 Then
+            cbKeyItem.Text:=VNumToStr(0)+' [Uscita diretta]'
+          Else If Value.KeyVNUM=-1 Then
+            cbKeyItem.Text:=VNumToStr(-1)+' [Nessuna serratura]'
+          Else
+            cbKeyItem.Text:=VNumToStr(Value.KeyVNUM)+' [Oggetto sconosciuto]'
+        End;
+
+      cbTargetRoom.ItemIndex:=-1;
+      For LI:=1 to Pred(FZone.Rooms.Count) Do
+        Begin
+          If Assigned(cbTargetRoom.Items.Objects[LI]) Then
+            If Value.TargetRoom=(cbTargetRoom.Items.Objects[LI] as TRoom).VNum Then
+              Begin
+                cbTargetRoom.ItemIndex:=LI;
+                Break;
+              End;
+          End;
+      If cbTargetRoom.ItemIndex=-1 Then
+        Begin
+          If Value.KeyVNUM=-1 Then
+            cbTargetRoom.ItemIndex:=0
+          Else
+            cbTargetRoom.Text:=VNumToStr(Value.TargetRoom)+' [Stanza sconosciuta]'
+        End;
+      rgCommands.ItemIndex:=-1;
+      For LI:=0 to High(COpenCommands) Do
+        If COpenCommands[LI].ID=Value.OpenCommand Then
+          Begin
+            rgCommands.ItemIndex:=LI;
+            Break;
+          End;
+      rgStatus.ItemIndex:=Value.DefaultState;
+    End
+  Else
+    Begin
+      cbKeyItem.Text:=VNumToStr(0)+' [Uscita diretta]';
+      rgCommands.ItemIndex:=0;
+      rgStatus.ItemIndex:=0;
+      cbTargetRoom.Text:=VNumToStr(0)+' [Stanza sconosciuta]';
+      edtKey.Text:='';
+      reDesc.Text:='';
+    End;
+end;
+
+procedure TfrmEditExits.ChangeExitFlag(Sender: TObject);
+begin
+
+end;
+
+procedure TfrmEditExits.aOpenOppositeExecute(Sender: TObject);
+var
+  LVNUM:Integer;
+  LIndex:Integer;
+  LRoom:TRoom;
+  LDirection:Byte;
+begin
+  LVNUM:=SpecialStrToVNUM(cbTargetRoom.Text);
+  LIndex:=FZone.Rooms.IndexOf(LVNUM);
+  If LIndex>=0 then
+    Begin
+      LRoom:=(FZone.Rooms[LIndex] as TRoom);
+      LDirection:=InvertDirection(FDirection);
+      If LRoom.Exits[LDirection].Opened Then
+        begin
+          If MessageDlg('L''uscita indicata è ià aperta. Sovrascriverla?',mtWarning,[mbYes,mbNo],0)=mrYes Then
+            Begin
+              LRoom.Exits[LDirection]:=GetExit;
+              LRoom.Exits[LDirection].TargetRoom:=FRoomVNUM;
+            End;
+        End
+      Else
+        Begin
+          LRoom.Exits[LDirection]:=GetExit;
+          LRoom.Exits[LDirection].TargetRoom:=FRoomVNUM;
+        End;
+    End
+  Else
+    MessageDlg('La stanza non fa parte di questa zona!',mtError,[mbOk],0);
+end;
+
+procedure TfrmEditExits.SetRoomVNUM(const Value: Integer);
+begin
+  FRoomVNUM := Value;
+end;
+
+procedure TfrmEditExits.SetDirection(const Value: Integer);
+begin
+  FDirection := Value;
+end;
+
+procedure TfrmEditExits.ResetVNUM(Sender: TObject);
+var
+  LVNUM:Integer;
+  LSVNUM:String;
+  LCB:TComboBox;
+  LI:Integer;
+  LFound:Boolean;
+begin
+  LFound:=False;
+  If Sender is TComboBox Then
+    Begin
+      LCB:=Sender as TComboBox;
+      LVNUM:=SpecialStrToVNUM(LCB.Text);
+      LSVNUM:=VNUMToStr(LVNUM);
+      For LI:=0 to Pred(LCB.Items.Count) Do
+        Begin
+          If Pos(LSVNUM,LCB.Items.Strings[LI])>0 Then
+            begin
+              LCB.ItemIndex:=LI;
+              LFound:=True;
+              Break;
+            End;
+        End;
+      If Not LFound Then
+        Begin
+          if LCB=cbKeyItem Then
+            Case LVNUM Of
+            -1: LSVNUM:=LSVNUM+'  [Nessuna serratura]';
+            0: LSVNUM:=LSVNUM+' [Uscita diretta]';
+            Else
+              LSVNUM:=LSVNUM+' [Oggetto sconosciuto]';
+            End
+          Else if LCB=cbTargetRoom Then
+            LSVNUM:=LSVNUM+'  [Stanza sconosciuta]';
+          LCB.Text:=LSVNUM;
+        End;
+    End;
+end;
+
+end.
