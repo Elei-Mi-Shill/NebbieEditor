@@ -1,0 +1,97 @@
+[==obj==]
+#vnum
+key~
+short~
+long~
+action~
+type_flags obj_flags wear_flags
+v1 v2 v3 v4
+weight cost rent
+E
+extra_key~
+extra_text~
+A
+Affect_location Modifier
+X ver
+level hp_curr hp_max
+
+Le sezioni E (extra descriptions) e A (affects) sono opzionali; si possono avere massimo 5 Affects
+X aggiunta per la prossima versione di Nebbie; ver e' il numero di versione
+1: level hp_curr hp_max
+
+[==Mob==]
+#vnum
+key~
+short~
+long~
+description~
+// SIMPLE
+flags affect_by alignment S
+level tacho armor hitnodice(d)hitnosizedice(+)hitadd damnodice(d)damsizedice(+)damadd
+gold exp
+position default_pos sex
+// NON BASHABLE MULTI ATTACK
+flags affect_by alignment B Attacks
+level tacho AC HP_bonus damnodice(d)damsizedice(+)damadd
+? gold XPbonus Race
+position default_pos sex [res immu susce]
+// NEW
+flags affect_by alignment N
+level tacho AC HP_Bonus DamNoDice(d)DamSizeDice(+)DamAdd
+? gold XPbonus Race
+position default_pos sex [res immu susce]
+// NEW MULTI ATTACKS
+flags affect_by alignment A Attacks
+level tacho AC HP_Bonus DamNoDice(d)DamSizeDice(+)DamAdd
+? gold XPbonus Race
+position default_pos sex [res immu susce]
+// WITH_SOUND
+flags affect_by alignment L Attacks
+level tacho AC HP_Bonus DamNoDice(d)DamSizeDice(+)DamAdd
+? gold XPbonus Race
+position default_pos sex [res immu susce]
+Same_Room_Desc~
+Adjacent_Room_Desc~
+// SPECIAL
+flags affect_by alignment C Attacks
+level tacho AC HP_Bonus DamNoDice(d)DamSizeDice(+)DamAdd
+? gold XPbonus Race move
+position default_pos sex [res immu susce]
+Occupation P1 P2 P3 P4
+Special_Attack p1 p2 p3 p4
+
+Attenzione se ci sono le resistenze, sex viene aumentato di 3
+
+[==Rooms==]
+#vnum
+name~
+description~
+zone_nr flags sector [Teleport_Time Teleport_Target Teleport_Flags [Telep_Count] Teleport_TrueSector] [Current_Str Current_Dir] [Tunnel_Limit]
+D<dirnum>
+desc~
+doorname~
+door_flags keynumber dest_room Open_Command
+D<dirnum> N // New Format
+desc~
+doorname~
+door_flags keyshape dest_room Open_Command
+CloseMsg~ // Only if door
+<PickLockCR> <SpotCR> // Only if door
+TramMsg~ // Only if trapped
+<TrapCR> <TrapDmg> <TrapDmgType> // Only if trapped
+E
+extra_key~
+extra_text~
+S
+
+[==zon==]
+#znum
+name~
+top lifespan resetmode
+M <cond=0> <vnum_mob> <limit> <vnum_room>
+E <cond=1> <vnum_obj> <limit> <eq_location>
+G <cond=1> <vnum_obj> <limit>
+H <cond=1> <feeling_type> <toward>
+F <cond=1> <feeling_type> <toward>
+O <cond=0> <vnum_obj> <limit> <vnum_room> <room_limit>
+P <cond=1> <vnum_obj> <limit> <vnum_container>
